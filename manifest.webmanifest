@@ -1,0 +1,26 @@
+{
+  "name": "泛式",
+  "short_name": "泛式",
+  "description": "图片 / 音频 / Word / PDF 互转，纯浏览器本地处理，不上传文件。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff2f8",
+  "theme_color": "#f2508b",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

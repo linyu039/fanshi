@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>泛式</title>
+<link rel="stylesheet" href="assets/style.css" />
+<link rel="icon" type="image/png" sizes="64x64" href="assets/icon-64.png" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#f2508b" />
+<meta name="description" content="图片 / 音频 / Word / PDF 互转，纯浏览器本地处理，不上传文件。" />
+</head>
+<body>
+<div class="petals" id="petals" aria-hidden="true"></div>
+<!-- ── 侧边栏 ───────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark">
+        <img src="assets/icon-64.png" alt="泛式" width="26" height="26" />
+      </div>
+    <div class="brand-text">
+      <strong>泛式</strong>
+    </div>
+  </div>
+
+  <nav class="nav" id="nav">
+    <button class="nav-item is-active" data-view="image">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>
+      <span>图片转换</span>
+    </button>
+    <button class="nav-item" data-view="music">
+      <svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+      <span>音频转换</span>
+    </button>
+    <button class="nav-item" data-view="doc">
+      <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h4"/></svg>
+      <span>文档转换</span>
+    </button>
+    <button class="nav-item" data-view="wenku">
+      <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M8 7h7M8 11h7"/></svg>
+      <span>文库提取</span>
+    </button>
+    <button class="nav-item" data-view="settings">
+      <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="17" cy="17" r="1.8"/></svg>
+      <span>设置</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-foot">
+    <b id="engineState">离线运行</b>
+    <small>文件不出本机</small>
+  </div>
+</aside>
+
+<!-- ── 主内容 ───────────────────────────────────────── -->
+<main class="main">
+  <header class="topbar">
+    <div>
+      <h1 id="viewTitle">图片转换</h1>
+      <p id="viewSub">PNG · JPG · WebP · AVIF · BMP · ICO 批量互转，本地处理</p>
+    </div>
+    <div class="topbar-right">
+      <div class="chip" id="capChip">检测中…</div>
+      <button class="icon-btn" id="themeBtn" title="切换明暗">
+        <svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══ 图片 ═══ -->
+  <section class="view is-active" id="view-image">
+    <div class="dropzone" id="imgDrop">
+      <input type="file" id="imgInput" multiple accept="image/*" hidden />
+      <div class="dz-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/></svg>
+      </div>
+      <h3>把图片拖进来，或点击选择</h3>
+      <p>批量 · 目录递归 · 原文件只读</p>
+      <div class="dz-formats"><span>PNG</span><span>JPG</span><span>WEBP</span><span>AVIF</span><span>BMP</span><span>ICO</span><span>GIF</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>输出参数</h2>
+        <span class="hint" id="imgSupportHint"></span>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>目标格式</span>
+          <div class="segment" id="imgFormat">
+            <button data-fmt="image/png" class="is-on">PNG</button>
+            <button data-fmt="image/jpeg">JPG</button>
+            <button data-fmt="image/webp">WEBP</button>
+            <button data-fmt="image/avif" data-need="avif">AVIF</button>
+            <button data-fmt="image/bmp">BMP</button>
+            <button data-fmt="image/x-icon">ICO</button>
+          </div>
+        </label>
+      </div>
+      <div class="field-row grid-3">
+        <label class="field">
+          <span>质量 <b id="qVal">92</b>%</span>
+          <input type="range" id="imgQuality" min="35" max="100" value="92" />
+        </label>
+        <label class="field">
+          <span>最大边长（0 = 不缩放）</span>
+          <input type="number" id="imgMax" value="0" min="0" step="64" />
+        </label>
+        <label class="field">
+          <span>透明填充色（转不透明格式时）</span>
+          <div class="color-field"><input type="color" id="imgBg" value="#ffffff" /><code id="imgBgHex">#ffffff</code></div>
+        </label>
+      </div>
+      <div class="switch-row">
+        <label class="switch"><input type="checkbox" id="imgZip" checked /><i></i><span>完成后打包 ZIP</span></label>
+        <label class="switch"><input type="checkbox" id="imgKeepName" checked /><i></i><span>保留原文件名</span></label>
+        <label class="switch"><input type="checkbox" id="imgAutoDl" /><i></i><span>逐个自动下载</span></label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>转换队列 <em id="imgCount" class="count">0</em></h2>
+        <div class="head-actions">
+          <button class="btn ghost sm" id="imgClear">清空</button>
+          <button class="btn sm" id="imgRun">开始转换</button>
+          <button class="btn primary sm" id="imgZipDl" disabled>下载全部</button>
+        </div>
+      </div>
+      <div class="queue" id="imgQueue">
+        <div class="empty">还没有文件，先拖入几张图片吧</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 音乐 ═══ -->
+  <section class="view" id="view-music">
+    <div class="dropzone" id="musDrop">
+      <input type="file" id="musInput" multiple accept=".ncm,.uc,.qmc0,.qmc3,.qmcflac,.qmcogg,.mp3,.flac,.wav,.ogg,.m4a,.aac,.ape,.wma,audio/*" hidden />
+      <div class="dz-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>
+      </div>
+      <h3>拖入音频文件</h3>
+      <p>MP3 · WAV · OGG · AIFF 互转 · 全程本地编码</p>
+      <div class="dz-formats"><span>MP3</span><span>FLAC</span><span>WAV</span><span>OGG</span><span>M4A</span><span>AAC</span><span>AIFF</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>输出格式</h2>
+        <span class="hint" id="musCodecHint"></span>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>模式</span>
+          <div class="segment" id="musFormat">
+            <button data-fmt="keep" class="is-on">保持原格式</button>
+            <button data-fmt="wav">WAV</button>
+            <button data-fmt="mp3">MP3</button>
+            <button data-fmt="opus">OGG</button>
+            <button data-fmt="aiff">AIFF</button>
+          </div>
+        </label>
+      </div>
+      <div class="field-row grid-3" id="musWavOpts" hidden>
+        <label class="field"><span>采样率</span>
+          <select id="musRate"><option value="44100">44.1 kHz</option><option value="48000">48 kHz</option><option value="22050">22.05 kHz</option></select>
+        </label>
+        <label class="field"><span>声道</span>
+          <select id="musCh"><option value="2">立体声</option><option value="1">单声道</option></select>
+        </label>
+        <label class="field"><span>位深</span>
+          <select id="musBits"><option value="16">16 bit</option><option value="24">24 bit</option></select>
+        </label>
+      </div>
+      <div class="field-row grid-3">
+        <label class="field"><span>文件名模板</span>
+          <input type="text" id="musTpl" value="{artist} - {title}" />
+        </label>
+        <label class="field"><span>码率（MP3 / OGG）</span>
+          <select id="musBitrate"><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option></select>
+        </label>
+        <div class="field">
+          <span>编码器</span>
+          <div class="mini-status" id="lameState">编码器检测中…</div>
+        </div>
+      </div>
+      <div class="switch-row">
+        <label class="switch"><input type="checkbox" id="musCover" checked /><i></i><span>导出专辑封面</span></label>
+        <label class="switch"><input type="checkbox" id="musMeta" checked /><i></i><span>写入标签信息 (ID3v2)</span></label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>音频队列 <em id="musCount" class="count">0</em></h2>
+        <div class="head-actions">
+          <button class="btn ghost sm" id="musClear">清空</button>
+          <button class="btn sm" id="musRun">开始处理</button>
+          <button class="btn primary sm" id="musZipDl" disabled>下载全部</button>
+        </div>
+      </div>
+      <div class="queue audio" id="musQueue"><div class="empty">还没有音频文件</div></div>
+    </div>
+
+
+  </section>
+
+  <!-- ═══ 文档 ═══ -->
+  <section class="view" id="view-doc">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>文档工具箱</h2>
+        <div class="segment lg" id="docTab">
+          <button data-tab="img2pdf" class="is-on">图片 → PDF</button>
+          <button data-tab="txt2pdf">文本 → PDF</button>
+          <button data-tab="pdf2x">PDF → 图片 / 文本</button>
+          <button data-tab="docx2pdf">Word → PDF</button>
+        </div>
+      </div>
+
+      <div class="doc-pane is-active" id="pane-img2pdf">
+        <div class="dropzone slim" id="p2iDrop">
+          <input type="file" id="p2iInput" multiple accept="image/*" hidden />
+          <h3>拖入图片，按顺序合成一份 PDF</h3>
+          <p>JPEG 直嵌 · PNG 自动转码</p>
+        </div>
+        <div class="field-row grid-3">
+          <label class="field"><span>页面尺寸</span>
+            <select id="pdfPageSize"><option value="fit">跟随图片</option><option value="a4">A4 适配</option><option value="letter">Letter</option></select>
+          </label>
+          <label class="field"><span>页边距 (mm)</span><input type="number" id="pdfMargin" value="0" min="0" /></label>
+          <label class="field"><span>输出文件名</span><input type="text" id="pdfName" value="album" /></label>
+        </div>
+        <div class="queue compact" id="p2iQueue"><div class="empty">尚未添加图片</div></div>
+        <div class="pane-foot"><button class="btn primary" id="p2iRun">生成 PDF</button></div>
+      </div>
+
+      <div class="doc-pane" id="pane-txt2pdf">
+        <textarea id="txtSrc" class="big-text" placeholder="在此粘贴任意文本（支持中文，自动分页渲染）…"></textarea>
+        <div class="field-row grid-3">
+          <label class="field"><span>纸张</span><select id="t2pSize"><option value="a4">A4</option><option value="letter">Letter</option></select></label>
+          <label class="field"><span>字号 (pt)</span><input type="number" id="t2pFont" value="12" min="6" max="48" /></label>
+          <label class="field"><span>输出文件名</span><input type="text" id="t2pName" value="document" /></label>
+        </div>
+        <div class="pane-foot"><button class="btn primary" id="t2pRun">生成 PDF</button></div>
+      </div>
+
+      <div class="doc-pane" id="pane-pdf2x">
+        <div class="dropzone slim" id="pdfDrop">
+          <input type="file" id="pdfInput" accept="application/pdf,.pdf" hidden />
+          <h3>拖入 PDF</h3>
+          <p>导出逐页 PNG 或全文 TXT / Markdown</p>
+        </div>
+        <div class="field-row grid-3">
+          <label class="field"><span>图片倍率</span><select id="pdfScale"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select></label>
+          <label class="field"><span>页范围</span><input type="text" id="pdfRange" placeholder="如 1-5,8" /></label>
+          <label class="field"><span>文字合并</span><select id="pdfParas"><option value="1">保留段落</option><option value="0">逐行</option></select></label>
+        </div>
+        <div class="pane-foot">
+          <button class="btn" id="pdf2img">导出页面图片</button>
+          <button class="btn" id="pdf2txt">导出文本</button>
+          <button class="btn primary" id="pdf2md">导出 Markdown</button>
+        </div>
+        <div class="mini-status" id="pdfjsState">PDF 引擎：待加载</div>
+      </div>
+
+      <div class="doc-pane" id="pane-docx2pdf">
+        <div class="dropzone slim" id="docxDrop">
+          <input type="file" id="docxInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
+          <h3>拖入 Word 文档（.docx）</h3>
+          <p>解析 OOXML：标题、段落、粗斜体、下划线、列表、表格、内嵌图片</p>
+        </div>
+        <div class="field-row grid-3">
+          <label class="field"><span>纸张</span>
+            <select id="docxSize"><option value="a4">A4</option><option value="letter">Letter</option></select>
+          </label>
+          <label class="field"><span>页边距 (pt)</span><input type="number" id="docxMargin" value="56" min="0" max="120" /></label>
+          <label class="field"><span>正文字号 (pt)</span><input type="number" id="docxFont" value="11" min="6" max="24" /></label>
+        </div>
+        <div class="pane-foot">
+          <button class="btn primary" id="docxRun" disabled>生成 PDF</button>
+        </div>
+        <div class="mini-status" id="docxState">等待文件</div>
+      </div>
+    </div>
+
+
+  </section>
+
+  <!-- ═══ 文库 ═══ -->
+  <section class="view" id="view-wenku">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>抓取参数</h2>
+        <div class="mini-status" id="wbState">本地代理：未连接</div>
+      </div>
+      <div class="field-row grid-3">
+        <label class="field"><span>文档地址</span>
+          <input type="url" id="wbUrl" placeholder="https://wenku.example.com/view/xxxx.html" />
+        </label>
+        <label class="field"><span>结果类型</span>
+          <select id="wbResult">
+            <option value="auto" selected>自动（原件优先，其次正文）</option>
+            <option value="file">只取原件</option>
+            <option value="text">只要文本</option>
+          </select>
+        </label>
+        <label class="field"><span>提取策略</span>
+          <select id="wbMode">
+            <option value="auto">自动（正文 DOM → 分页接口 → 预览图拼合）</option>
+            <option value="dom">正文 DOM 直取</option>
+            <option value="api">分页接口遍历</option>
+            <option value="img">预览图逐页下载并拼 PDF</option>
+            <option value="paste">仅用下方粘贴内容</option>
+          </select>
+        </label>
+      </div>
+      <div class="field-row grid-4">
+        <label class="field"><span>文档类型</span>
+          <select id="wbType">
+            <option value="auto">自动检测</option>
+            <option value="ppt">PPT（只取文字）</option>
+            <option value="word">Word</option>
+            <option value="pdf">PDF</option>
+            <option value="text">网页正文</option>
+          </select>
+        </label>
+        <label class="field"><span>页数上限</span><input type="number" id="wbMax" value="60" min="1" /></label>
+        <label class="field"><span>并发</span><input type="number" id="wbConc" value="4" min="1" max="12" /></label>
+        <label class="field"><span>分页请求模板</span><input type="text" id="wbApi" value="{base}/api/doc/{id}/page/{n}?pn={n}" /></label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Cookie（可选 · 需要登录态的站点必填）</span>
+          <textarea id="wbCookie" class="mid-text" placeholder="F12 → Network → 任意请求 → Request Headers，整行复制 Cookie。仅在填了值时随请求发送给本机代理。"></textarea>
+        </label>
+        <label class="field"><span>手动粘贴的正文（可留空；DOM 抓取失败时使用）</span>
+          <textarea id="wbPaste" class="mid-text" placeholder="粘贴文档正文或逐页文字…"></textarea>
+        </label>
+      </div>
+      <div class="pane-foot">
+        <button class="btn" id="wbProbe">检测本地代理</button>
+        <button class="btn primary" id="wbRun">抓取并解析</button>
+        <button class="btn" id="wbPdf" disabled>导出 PDF</button>
+        <button class="btn" id="wbTxt" disabled>导出 TXT</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>解析结果</h2><span class="hint" id="wbMeta"></span></div>
+      <div class="wb-preview" id="wbPreview"><div class="empty">尚未抓取</div></div>
+    </div>
+
+    <p class="foot-note" style="margin-top:2px">抓不到？<a href="tools/guide.html" target="_blank" rel="noreferrer" style="color:var(--accent);text-decoration:underline">打开使用向导</a> —— 三步图文，不用填 Cookie、不用开终端。<br>提取顺序：正文 DOM → 分页接口 → 预览图拼合，失败自动降级。</p>
+  </section>
+
+  <!-- ═══ 设置 ═══ -->
+  <section class="view" id="view-settings">
+    <div class="panel">
+      <div class="panel-head"><h2>通用</h2></div>
+      <div class="field-row grid-3">
+        <label class="field"><span>默认图片格式</span>
+          <select id="setFmt"><option value="image/png">PNG</option><option value="image/jpeg">JPG</option><option value="image/webp">WEBP</option></select>
+        </label>
+        <label class="field"><span>并发任务数</span><input type="number" id="setConc" value="3" min="1" max="8" /></label>
+        <label class="field"><span>JPEG 背景色</span><div class="color-field"><input type="color" id="setBg" value="#ffffff" /><code id="setBgHex">#ffffff</code></div></label>
+      </div>
+      <div class="switch-row">
+        <label class="switch"><input type="checkbox" id="setAnim" checked /><i></i><span>背景动效</span></label>
+        <label class="switch"><input type="checkbox" id="setPersist" checked /><i></i><span>记住本页设置</span></label>
+      </div>
+      <div class="pane-foot"><button class="btn ghost" id="setReset">恢复默认</button></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>运行环境</h2></div>
+      <div class="env-grid" id="envGrid"></div>
+    </div>
+  </section>
+</main>
+
+<div class="toasts" id="toasts"></div>
+<div class="drop-overlay" id="dropOverlay"><div>松开鼠标即可导入</div></div>
+
+<script src="assets/util.js"></script>
+<script src="assets/ncm.js"></script>
+<script src="assets/image.js"></script>
+<script src="assets/pdfout.js"></script>
+<script src="assets/audio.js"></script>
+<script src="assets/docx.js"></script>
+<script src="assets/doc.js"></script>
+<script src="assets/app.js"></script>
+<script>
+  // 注册离线缓存（file:// 下不可用，忽略）
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>

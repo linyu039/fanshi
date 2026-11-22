@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>泛式 · 文库提取书签</title>
+<style>
+  :root{--bg:#f1f1ee;--surface:#fbfbf9;--line:#d6d6d0;--line-strong:#b6b6af;--ink:#15171a;--ink-2:#5a5f63;--ink-3:#8b9094;--accent:#d9480f;--r:2px}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 "Inter","Helvetica Neue","Microsoft YaHei",sans-serif;padding:40px 32px}
+  .wrap{max-width:780px;margin:0 auto}
+  h1{font-size:20px;font-weight:600;margin:0 0 6px}
+  p{color:var(--ink-3);margin:0 0 18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:18px}
+  .bm{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;padding:9px 18px;border-radius:var(--r);font-weight:600;cursor:grab}
+  .bm:active{cursor:grabbing}
+  button{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);padding:8px 14px;cursor:pointer;font:inherit}
+  button:hover{background:#e9e9e5}
+  ol,ul{margin:8px 0 0;padding-left:20px;color:var(--ink-2)}
+  li{margin:3px 0}
+  code{font-family:Consolas,monospace;background:#e9e9e5;padding:1px 5px;border-radius:1px;font-size:12px}
+  pre{background:#15171a;color:#e9e9e6;padding:12px;border-radius:var(--r);overflow:auto;font-size:11.5px;line-height:1.6;max-height:200px}
+  .kbd{font-family:Consolas,monospace;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:2px;padding:0 4px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>文库提取书签</h1>
+  <p>在你自己已登录的页面里取内容：有文字层导文字，纯图片文档导页面图打包 zip。</p>
+
+  <div class="card">
+    <a id="bm" class="bm" href="#">泛式 · 提取本文</a>
+    <button id="copy" style="margin-left:8px">复制书签代码</button>
+    <ol>
+      <li>把橙色按钮<b>拖到浏览器书签栏</b>（或点「复制书签代码」，新建书签粘进网址栏）。</li>
+      <li>用同一个浏览器打开文库文档页，等正文渲染出来。</li>
+      <li>点书签：<b>文字型</b>文档导出 <code>.txt</code>；<b>图片型</b>文档（扫描件 / 整页图）导出 <code>.zip</code>，里面是逐页 PNG/JPG。</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <b>为什么它能拿到 API 拿不到的东西</b>
+    <ul>
+      <li>百度的 <code>retype/zoom</code> 图片接口对匿名请求返回 0 字节，<code>retype/json</code> 直接报防盗链 —— 图片页只能靠浏览器渲染；</li>
+      <li>这个书签在页面上下文执行，拿的是<b>已渲染的 canvas / img</b>，不受接口鉴权限制；</li>
+      <li>不动用你的账号做任何请求，文件由浏览器本地生成。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <b>如果还是空</b>
+    <ul>
+      <li>先把页面<b>整篇滚动到底</b>——懒加载的正文与图片要滚过才会进 DOM；</li>
+      <li>PPT 播放器要逐页点过去，虚拟列表才会生成对应节点；</li>
+      <li>仍不行按 <span class="kbd">F12</span> → Console 看 <code>[泛式]</code> 开头的日志。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <b>书签源码</b>
+    <pre id="log">生成中…</pre>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   提取器：会被 toString() 后作为书签执行，因此不能引用外部作用域。
+   文字优先；纯图片文档则导出页面图 zip。
+   ══════════════════════════════════════════════════════════════ */
+async function WK_EXTRACT() {
+  var NOISE = /^(上一页|下一页|尾页|末页|首页|播放|暂停|继续|全屏|退出|目录|分享|收藏|下载|举报|返回|登录|注册|搜索|评论|\d+\s*[/|]\s*\d+)$/;
+  var NOISE_ONLY = /^(?:(?:上一页|下一页|尾页|首页|播放|暂停|全屏|退出|目录|分享|收藏|下载|举报|返回|登录|注册|搜索|评论)\s*)+$/;
+  var BAD = /(访问出错了|页面没有找到|请先登录|安全验证|滑动验证|人机验证)/;
+
+  var bodyText = (document.body && document.body.innerText) || '';
+  if (BAD.test(bodyText.slice(0, 600))) {
+    alert('[泛式] 当前是错误/验证页，不是文档正文。\n请确认已登录、链接有效，刷新后再试。');
+    return;
+  }
+
+  function pad(n) { return ('000' + n).slice(-4); }
+
+  function clean(s) {
+    var lines = String(s || '').split('\n'), out = [];
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].replace(/\s+/g, ' ').trim();
+      if (!t || NOISE.test(t) || NOISE_ONLY.test(t)) continue;
+      if (out.length && out[out.length - 1] === t) continue;
+      out.push(t);
+    }
+    return out.join('\n');
+  }
+
+  function saveBlob(blob, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }
+
+  function titleOf() {
+    return ((document.title || 'document')
+      .replace(/\s*[-_|–—]\s*[^-_|–—]{0,14}(文库|文档|doc|网)\s*$/i, '')
+      .replace(/\s+/g, ' ').trim().slice(0, 80) || 'document')
+      .replace(/[\\/:*?"<>|]/g, '_');
+  }
+
+  /* ── 极简 ZIP（STORE，无压缩） ── */
+  var CRC = (function () {
+    var t = new Uint32Array(256);
+    for (var n = 0; n < 256; n++) {
+      var c = n;
+      for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(u8) {
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  function zip(files) {
+    var parts = [], central = [], offset = 0, enc = new TextEncoder();
+    var d = new Date();
+    var dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+    var dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+    files.forEach(function (f) {
+      var name = enc.encode(f.name), data = f.data, crc = crc32(data);
+      var lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+      lh.setUint16(8, 0, true); lh.setUint16(10, dt, true); lh.setUint16(12, dd, true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
+      lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, data);
+      var cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true);
+      cd.setUint16(8, 0x0800, true); cd.setUint16(10, 0, true); cd.setUint16(12, dt, true);
+      cd.setUint16(14, dd, true); cd.setUint32(16, crc, true); cd.setUint32(20, data.length, true);
+      cd.setUint32(24, data.length, true); cd.setUint16(28, name.length, true);
+      cd.setUint32(42, offset, true);
+      central.push(new Uint8Array(cd.buffer), name);
+      offset += 30 + name.length + data.length;
+    });
+    var cdSize = central.reduce(function (a, x) { return a + x.length; }, 0);
+    var end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true);
+    end.setUint16(10, files.length, true); end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob(parts.concat(central, [new Uint8Array(end.buffer)]), { type: 'application/zip' });
+  }
+
+  /* ── 图片型文档：导出页面图 ── */
+  async function exportImages() {
+    var nodes = [].slice.call(document.querySelectorAll('canvas, img'));
+    var files = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      try {
+        if (n.tagName === 'CANVAS') {
+          if (!n.width || n.width < 200) continue;
+          var blob = await new Promise(function (r) { n.toBlob(r, 'image/png'); });
+          if (blob) files.push({ name: 'page-' + pad(files.length + 1) + '.png', data: new Uint8Array(await blob.arrayBuffer()) });
+        } else {
+          if (!n.naturalWidth || n.naturalWidth < 300) continue;
+          var src = n.currentSrc || n.src;
+          if (!src) continue;
+          if (src.indexOf('data:') === 0) {
+            var bin = atob(src.split(',')[1] || '');
+            var u8 = new Uint8Array(bin.length);
+            for (var k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+            files.push({ name: 'page-' + pad(files.length + 1) + '.png', data: u8 });
+            continue;
+          }
+          if (src.indexOf('blob:') === 0) continue;
+          var resp = await fetch(src, { credentials: 'include' });
+          if (!resp.ok) continue;
+          var buf = new Uint8Array(await resp.arrayBuffer());
+          if (buf.length < 2048) continue;
+          var ext = /\.png(\?|$)/i.test(src) ? 'png' : 'jpg';
+          files.push({ name: 'page-' + pad(files.length + 1) + '.' + ext, data: buf });
+        }
+      } catch (e) { /* 单张失败跳过 */ }
+    }
+    if (!files.length) {
+      alert('[泛式] 没找到可导出的页面图，也没取到文字。\n\n· 先滚动到底 / 逐页点过\n· 图片可能是跨域受限，试试先在页面上右键另存一张');
+      return;
+    }
+    saveBlob(zip(files), titleOf() + '-pages.zip');
+    console.log('[泛式] 已导出 ' + files.length + ' 张页面图');
+  }
+
+  /* ── 文字型文档：优先取文字 ── */
+  var cands = [].slice.call(document.querySelectorAll('[class*="slide"],[class*="ppt-page"],[data-slide-index]'));
+  cands = cands.filter(function (n) {
+    return cands.filter(function (m) { return m !== n && n.contains(m); }).length < 2;
+  });
+  var slides = [], seenSlide = {};
+  cands.forEach(function (n) {
+    var t = clean(n.innerText);
+    if (t && !seenSlide[t]) { seenSlide[t] = 1; slides.push(t); }
+  });
+
+  var text, kind;
+  if (slides.length >= 2) {
+    kind = 'PPT';
+    var buf = [];
+    for (var s = 0; s < slides.length; s++) {
+      buf.push('【第 ' + (s + 1) + ' 页】');
+      buf.push(slides[s]);
+      buf.push('');
+    }
+    text = buf.join('\n');
+  } else {
+    kind = '正文';
+    var sels = ['.reader-content', '#doc-content', '.doc-content', '.article-content', '.content-body',
+      '.w-content', 'article', '#content', '.content', 'main'];
+    var best = null, score = 0;
+    sels.forEach(function (sel) {
+      [].forEach.call(document.querySelectorAll(sel), function (n) {
+        var t = n.innerText || '';
+        var sc = t.length + n.querySelectorAll('p').length * 80;
+        if (t.length > 80 && sc > score) { score = sc; best = n; }
+      });
+    });
+    text = clean((best || document.body).innerText);
+  }
+
+  if (!text || text.length < 40) {
+    console.log('[泛式] 文字只取到 ' + (text ? text.length : 0) + ' 字符，转去导出页面图');
+    await exportImages();
+    return;
+  }
+
+  var title = titleOf();
+  var sep = '';
+  for (var q = 0; q < Math.min(40, title.length); q++) sep += '=';
+  var out = title + '\n' + sep + '\n类型：' + kind + ' ｜ 长度：' + text.length + ' 字符\n\n' + text;
+  saveBlob(new Blob([out], { type: 'text/plain;charset=utf-8' }), title + '.txt');
+  console.log('[泛式] 已导出 ' + kind + ' · ' + out.length + ' 字符');
+}
+
+/* 生成 javascript: 书签 URL */
+(function () {
+  var src = '(' + WK_EXTRACT.toString() + ')()';
+  src = src.replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ');
+  var href = 'javascript:' + src;
+  var bm = document.getElementById('bm');
+  bm.setAttribute('href', href);
+  document.getElementById('log').textContent = href;
+  document.getElementById('copy').addEventListener('click', function () {
+    var btn = this;
+    function done() { btn.textContent = '已复制'; setTimeout(function () { btn.textContent = '复制书签代码'; }, 1600); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = href; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { alert('复制失败，请手动从下方源码框复制'); }
+      ta.remove();
+    }
+    if (navigator.clipboard) navigator.clipboard.writeText(href).then(done, fallback);
+    else fallback();
+  });
+})();
+</script>
+</body>
+</html>
